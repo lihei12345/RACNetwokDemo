@@ -18,7 +18,7 @@
 @property (nonatomic, strong) RACDisposable *disposable;
 
 @property (nonatomic, strong) RACCommand *signalCommand;
-@property (nonatomic, strong) RACCommand *cancelCaommand;
+@property (nonatomic, strong) RACCommand *cancelCommand;
 
 @end
 
@@ -37,7 +37,7 @@
             NSLog(@"signal command");
             self.isExecuting = YES;
             // use takeUntil: for cancellation: https://github.com/ReactiveCocoa/ReactiveCocoa/issues/1326
-            RACSignal *signal = [[self urlRequestSignal] takeUntil:self.cancelCaommand.executionSignals];
+            RACSignal *signal = [[self urlRequestSignal] takeUntil:self.cancelCommand.executionSignals];
             self.disposable = [signal subscribeNext:^(id x) {
                 NSLog(@"next");
                 NSMutableArray *tmpArray = [[NSMutableArray alloc] initWithArray:self.dataArray];
@@ -57,7 +57,7 @@
             return signal;
         }];
         
-        _cancelCaommand = [[RACCommand alloc] initWithSignalBlock:^RACSignal *(id input) {
+        _cancelCommand = [[RACCommand alloc] initWithSignalBlock:^RACSignal *(id input) {
             @strongify(self);
             NSLog(@"cancel command: dispose");
             [self.disposable dispose];
@@ -93,7 +93,7 @@
 - (void)cancelRequest:(void (^)())completion
 {
     if ([[self.signalCommand.executing first] boolValue]) {
-        [[self.cancelCaommand execute:nil] subscribeCompleted:^{
+        [[self.cancelCommand execute:nil] subscribeCompleted:^{
             completion();
         }];
     } else {
