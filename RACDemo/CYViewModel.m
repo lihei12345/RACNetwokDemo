@@ -14,6 +14,9 @@
 
 @interface CYViewModel ()
 
+//@property (nonatomic, strong) RACSubject *subject;
+//@property (nonatomic, strong) RACSignal *signal;
+
 @end
 
 @implementation CYViewModel
@@ -122,6 +125,9 @@
     } else {
         completion();
     }
+    
+//    // takeUntil:的等价实现方法
+//    [self.subject sendNext:nil];
 }
 
 - (RACSignal *)doRequest:(BOOL)cancelable
@@ -133,6 +139,39 @@
         signal = [self.signalCommand execute:@(cancelable)];
     }];
     return signal;
+    
+//    // takeUntil: 等价方法，仅仅调用RACDispose的dispose方法进行dispose的话，subscriber的complete方法不会被运行的，因为dispose的disposed属性已经改变，所以需要通过某种方式主动调用[subscriber sendComplete]；
+//    // takeUntil: 是利用RACCommand的executionSignals特性在调用execute:期间会触发一个RACObserver监听，然后发送sendNext。大致实现原理与下来代码类似。
+//    // 下面的代码则是通过使用RACSubject来主动触发一个sendNext:实现同样的原理
+//    self.subject = [RACSubject subject];
+//    RACSignal *signal = [RACSignal createSignal:^RACDisposable *(id<RACSubscriber> subscriber) {
+//        RACCompoundDisposable *disposable = [RACCompoundDisposable compoundDisposable];
+//        RACDisposable *selfDisposable = [[self cancelableUrlRequestSignal] subscribeNext:^(id x) {
+//            [subscriber sendNext:x];
+//        } error:^(NSError *error) {
+//            [subscriber sendError:error];
+//        } completed:^{
+//            [disposable dispose];
+//            [subscriber sendCompleted];
+//        }];
+//        [disposable addDisposable:selfDisposable];
+//        
+//        [self.subject subscribeNext:^(id x) {
+//            [disposable dispose];
+//            [subscriber sendCompleted];
+//        }];
+//        return disposable;
+//    }];
+//    
+//    [signal subscribeNext:^(id x) {
+//        NSLog(@"next");
+//    } error:^(NSError *error) {
+//        NSLog(@"error");
+//    } completed:^{
+//        NSLog(@"completed");
+//    }];
+//    
+//    return signal;
 }
 
 @end
