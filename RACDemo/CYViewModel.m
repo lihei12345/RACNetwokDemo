@@ -14,9 +14,6 @@
 
 @interface CYViewModel ()
 
-@property (nonatomic, strong) RACSignal *signal;
-@property (nonatomic, strong) RACDisposable *disposable;
-
 @end
 
 @implementation CYViewModel
@@ -47,22 +44,15 @@
                 }
                 self.dataArray = tmpArray;
             } error:^(NSError *error) {
-                @strongify(self);
                 NSLog(@"error: %@", [error localizedDescription]);
-                self.disposable = nil;
             } completed:^{
-                @strongify(self);
                 NSLog(@"complete");
-                self.disposable = nil;
             }];
             return signal;
         }];
         
         _cancelCommand = [[RACCommand alloc] initWithSignalBlock:^RACSignal *(id input) {
-            @strongify(self);
             NSLog(@"cancel command: dispose");
-            [self.disposable dispose];
-            self.disposable = nil;
             return [RACSignal empty];
         }];
     }
