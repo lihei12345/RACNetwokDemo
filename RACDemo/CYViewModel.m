@@ -65,7 +65,6 @@
             self.disposable = nil;
             return [RACSignal empty];
         }];
-
     }
     return self;
 }
@@ -77,6 +76,11 @@
 
 - (RACSignal *)cancelableUrlRequestSignal
 {
+    /**
+     * don't use replay* / connect, can't be disposed
+     * 这种方式发起的请求，一方面可以通过主动调用dispose，另外一方面内存被释放之后，这里的dispose也会立即被执行，请求会被cancel
+     * 同时，replay/replayLast 是 hot signal, 而autoconnect与replayLazily是cold signal，这一点需要注意
+     */
     RACReplaySubject *subject = [RACReplaySubject subject];
     return [[[RACSignal createSignal:^RACDisposable *(id subscriber) {
         NSLog(@"subscriber: operation start");
@@ -93,12 +97,15 @@
         }];
         return dispose;
     }] multicast:subject] autoconnect];
-    // don't use replay* / connect, can't be disposed
-    // 这种方式发起的请求，一方面可以通过主动调用dispose，另外一方面内存被释放之后，这里的dispose也会立即被执行，请求会被cancel
 }
 
 - (RACSignal *)urlRequestSignal
 {
+    /**
+     * 通过replay获得的signal，connection dispose不会被调用，也就不会触发这里source signal的dispose操作。
+     * 虽然在ViewModel dealloc之后，对应的Command和Signal被释放，会触发订阅者subscribeCompleted:方法，但是这里的source signal的dispose不会被执行。
+     * 只有在Operation请求结束的时候，dispose中的操作会被执行，[subscriber send**]这些操作同时也不会再被执行
+     */
     return [[RACSignal createSignal:^RACDisposable *(id subscriber) {
         NSLog(@"subscriber: operation start");
         AFHTTPRequestOperation *operation = [[AFHTTPRequestOperationManager manager] GET:@"http://homestead.app/api/gallery/new/1/2" parameters:nil success:^(AFHTTPRequestOperation *operation, id responseObject) {
@@ -114,8 +121,6 @@
         }];
         return dispose;
     }] replay];
-    // 通过replay发起的signal，由于无法主动调用dispose，在ViewModel dealloc之后，会触发订阅者completed:，对应的Command和Signal被释放，但是dispose不会被执行。
-    // 只有在Operation请求结束的时候，dispose中的操作会被执行，[subscriber send**]这些操作同时也不会再被执行
 }
 
 - (void)cancelRequest:(void (^)())completion
