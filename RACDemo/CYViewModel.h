@@ -11,10 +11,11 @@
 
 @interface CYViewModel : NSObject
 
-@property (nonatomic, assign) BOOL isExecuting;
+@property (nonatomic, strong) RACCommand *signalCommand;
+@property (nonatomic, strong) RACCommand *cancelCommand;
 @property (nonatomic, strong) NSMutableArray *dataArray;
 
-- (RACSignal *)doRequest;
+- (RACSignal *)doRequest:(BOOL)cancelable;
 - (void)cancelRequest:(void (^)())completion;
 
 @end

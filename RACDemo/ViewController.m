@@ -25,39 +25,65 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     // Do any additional setup after loading the view, typically from a nib.
+    self.view.backgroundColor = [UIColor whiteColor];
     
-    // refer : http://codeblog.shape.dk/blog/2013/12/05/reactivecocoa-essentials-understanding-and-using-raccommand/
+    // main refer : http://codeblog.shape.dk/blog/2013/12/05/reactivecocoa-essentials-understanding-and-using-raccommand/
     self.viewModel = [[CYViewModel alloc] init];
     
-    UIButton *button = [UIButton buttonWithType:UIButtonTypeCustom];
-    UIImage *normalImage = [UIImage imageNamed:@"icon_food_increase_small"];
-    [button setImage:normalImage forState:UIControlStateNormal];
-    [button setImage:[UIImage imageNamed:@"icon_food_increase_small_highlighted.png"] forState:UIControlStateHighlighted];
-    [button setImage:[UIImage imageNamed:@"icon_food_increase_small_disable"] forState:UIControlStateDisabled];
-    [button setImageEdgeInsets:UIEdgeInsetsMake(10, 10, 10, 10)];
-    button.frame = CGRectMake(100, 100, normalImage.size.width + 20, normalImage.size.height + 20);
-    
     @weakify(self);
-    [[button rac_signalForControlEvents:UIControlEventTouchUpInside] subscribeNext:^(id x) {
+    UIButton *sendButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    [sendButton setTitle:@"Replay signal" forState:UIControlStateNormal];
+    [sendButton setFrame:CGRectMake(10, 100, 120, 25)];
+    [[sendButton rac_signalForControlEvents:UIControlEventTouchUpInside] subscribeNext:^(id x) {
         @strongify(self);
-        [self.viewModel doRequest];
+        [self.viewModel doRequest:NO];
     }];
-    [self.view addSubview:button];
+    [self.view addSubview:sendButton];
     
-    [[[RACObserve(self.viewModel, dataArray) skip:1] deliverOn:[RACScheduler mainThreadScheduler]] subscribeNext:^(id x) {
+    UIButton *cancelSignal = [UIButton buttonWithType:UIButtonTypeSystem];
+    [cancelSignal setTitle:@"Autoconnect signal" forState:UIControlStateNormal];
+    [cancelSignal setFrame:CGRectMake(140, 100, 180, 25)];
+    [[cancelSignal rac_signalForControlEvents:UIControlEventTouchUpInside] subscribeNext:^(id x) {
+        @strongify(self);
+        [self.viewModel doRequest:YES];
+    }];
+    [self.view addSubview:cancelSignal];
+    
+    UIButton *cancelButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    [cancelButton setTitle:@"Cancel" forState:UIControlStateNormal];
+    [cancelButton setFrame:CGRectMake(100, 150, 60, 25)];
+    [[cancelButton rac_signalForControlEvents:UIControlEventTouchUpInside] subscribeNext:^(id x) {
+        @strongify(self);
+        [self.viewModel cancelRequest:^{
+            // do nothing
+        }];
+    }];
+    [self.view addSubview:cancelButton];
+    
+    UIButton *nextButton = [UIButton buttonWithType:UIButtonTypeSystem];
+    [nextButton setTitle:@"Next" forState:UIControlStateNormal];
+    [nextButton setFrame:CGRectMake(100, 200, 60, 25)];
+    [[nextButton rac_signalForControlEvents:UIControlEventTouchUpInside] subscribeNext:^(id x) {
+        @strongify(self);
+        ViewController *newViewController = [[ViewController alloc] init];
+        [self.navigationController pushViewController:newViewController animated:YES];
+    }];
+    [self.view addSubview:nextButton];
+    
+    
+    [[RACObserve(self.viewModel, dataArray) deliverOn:[RACScheduler mainThreadScheduler]] subscribeNext:^(id x) {
+        @strongify(self);
          NSLog(@"completed : %@", @(self.viewModel.dataArray.count));
     }];
     
-    [[[RACObserve(self.viewModel, isExecuting) skip:1] deliverOn:[RACScheduler mainThreadScheduler]] subscribeNext:^(NSNumber *isExcuting) {
+    [[self.viewModel.signalCommand.executing deliverOn:[RACScheduler mainThreadScheduler]] subscribeNext:^(NSNumber *isExcuting) {
         NSLog(@"isExecution: %@", [isExcuting boolValue] ? @"YES" : @"NO");
     }];
 }
 
 - (void)dealloc
 {
-    [self.viewModel cancelRequest:^{
-        // do nothing
-    }];
+    NSLog(@"view controller dealloc");
 }
 
 - (void)didReceiveMemoryWarning {

@@ -17,9 +17,6 @@
 @property (nonatomic, strong) RACSignal *signal;
 @property (nonatomic, strong) RACDisposable *disposable;
 
-@property (nonatomic, strong) RACCommand *signalCommand;
-@property (nonatomic, strong) RACCommand *cancelCommand;
-
 @end
 
 @implementation CYViewModel
@@ -29,16 +26,20 @@
     self = [super init];
     if (self) {
         _dataArray = [NSMutableArray new];
-        _isExecuting = NO;
         
         @weakify(self);
-        _signalCommand = [[RACCommand alloc] initWithSignalBlock:^RACSignal *(id input) {
+        _signalCommand = [[RACCommand alloc] initWithSignalBlock:^RACSignal *(NSNumber *cancelable) {
             @strongify(self);
             NSLog(@"signal command");
-            self.isExecuting = YES;
             // use takeUntil: for cancellation: https://github.com/ReactiveCocoa/ReactiveCocoa/issues/1326
-            RACSignal *signal = [[self urlRequestSignal] takeUntil:self.cancelCommand.executionSignals];
-            self.disposable = [signal subscribeNext:^(id x) {
+            RACSignal *signal = nil;
+            if ([cancelable boolValue]) {
+                signal = [[self cancelableUrlRequestSignal] takeUntil:self.cancelCommand.executionSignals];
+            } else {
+                signal = [[self urlRequestSignal] takeUntil:self.cancelCommand.executionSignals];
+            }
+            [signal subscribeNext:^(id x) {
+                @strongify(self);
                 NSLog(@"next");
                 NSMutableArray *tmpArray = [[NSMutableArray alloc] initWithArray:self.dataArray];
                 for (NSInteger i = 0; i < 10; i ++) {
@@ -46,13 +47,13 @@
                 }
                 self.dataArray = tmpArray;
             } error:^(NSError *error) {
+                @strongify(self);
                 NSLog(@"error: %@", [error localizedDescription]);
                 self.disposable = nil;
-                self.isExecuting = NO;
             } completed:^{
+                @strongify(self);
                 NSLog(@"complete");
                 self.disposable = nil;
-                self.isExecuting = NO;
             }];
             return signal;
         }];
@@ -62,7 +63,6 @@
             NSLog(@"cancel command: dispose");
             [self.disposable dispose];
             self.disposable = nil;
-            self.isExecuting = NO;
             return [RACSignal empty];
         }];
 
@@ -70,7 +70,12 @@
     return self;
 }
 
-- (RACSignal *)urlRequestSignal
+- (void)dealloc
+{
+    NSLog(@"ViewModel dealloc");
+}
+
+- (RACSignal *)cancelableUrlRequestSignal
 {
     RACReplaySubject *subject = [RACReplaySubject subject];
     return [[[RACSignal createSignal:^RACDisposable *(id subscriber) {
@@ -87,7 +92,30 @@
             [operation cancel];
         }];
         return dispose;
-    }] multicast:subject] autoconnect]; // don't use replay* / connect, can't be disposed
+    }] multicast:subject] autoconnect];
+    // don't use replay* / connect, can't be disposed
+    // 这种方式发起的请求，一方面可以通过主动调用dispose，另外一方面内存被释放之后，这里的dispose也会立即被执行，请求会被cancel
+}
+
+- (RACSignal *)urlRequestSignal
+{
+    return [[RACSignal createSignal:^RACDisposable *(id subscriber) {
+        NSLog(@"subscriber: operation start");
+        AFHTTPRequestOperation *operation = [[AFHTTPRequestOperationManager manager] GET:@"http://homestead.app/api/gallery/new/1/2" parameters:nil success:^(AFHTTPRequestOperation *operation, id responseObject) {
+            [subscriber sendNext:responseObject];
+            [subscriber sendCompleted];
+        } failure:^(AFHTTPRequestOperation *operation, NSError *error) {
+            [subscriber sendError:error];
+        }];
+        [operation start];
+        RACDisposable *dispose = [RACDisposable disposableWithBlock:^{
+            NSLog(@"operation cancel");
+            [operation cancel];
+        }];
+        return dispose;
+    }] replay];
+    // 通过replay发起的signal，由于无法主动调用dispose，在ViewModel dealloc之后，会触发订阅者completed:，对应的Command和Signal被释放，但是dispose不会被执行。
+    // 只有在Operation请求结束的时候，dispose中的操作会被执行，[subscriber send**]这些操作同时也不会再被执行
 }
 
 - (void)cancelRequest:(void (^)())completion
@@ -101,13 +129,13 @@
     }
 }
 
-- (RACSignal *)doRequest
+- (RACSignal *)doRequest:(BOOL)cancelable
 {
     __block RACSignal *signal;
     @weakify(self);
     [self cancelRequest:^{
         @strongify(self);
-        signal = [self.signalCommand execute:nil];
+        signal = [self.signalCommand execute:@(cancelable)];
     }];
     return signal;
 }
