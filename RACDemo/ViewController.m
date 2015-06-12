@@ -7,7 +7,6 @@
 //
 
 #import "ViewController.h"
-#import "SecondViewController.h"
 #import "CYViewModel.h"
 
 // third
