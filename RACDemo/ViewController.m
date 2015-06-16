@@ -79,7 +79,47 @@
         NSLog(@"isExecution: %@", [isExcuting boolValue] ? @"YES" : @"NO");
     }];
     
-    [self sideEffectDemo];
+//    [self sideEffectDemo];
+    [self flattenMapDemo];
+}
+
+- (void)flattenMapDemo
+{
+    __block int counter = 0;
+    RACSignal *sourceSignal = [[[RACSignal interval:1.0 onScheduler:RACScheduler.mainThreadScheduler] map:^id(id value) {
+        counter = counter + 1;
+        return @(counter);
+    }] take:3];
+    
+    RACSignal *(^makeSignal)(NSNumber *start) = ^RACSignal *(NSNumber *start) {
+        __block int step = start.intValue;
+        int startNum = start.intValue;
+        
+        return [RACSignal createSignal:^RACDisposable *(id<RACSubscriber> subscriber) {
+            [[[[RACSignal interval:1.0 onScheduler:RACScheduler.mainThreadScheduler] map:^id(id value) {
+                return [NSString stringWithFormat:@"mapped signal start : %@, step: %@", @(startNum), @(step++)];
+            }] take:3] subscribeNext:^(id x) {
+                [subscriber sendNext:x];
+            } completed:^{
+                [subscriber sendCompleted];
+            }];
+            return [RACDisposable disposableWithBlock:^{
+                NSLog(@"dispose start: %@", @(startNum));
+            }];
+        }];
+    };
+    
+//    RACSignal *resultSignal = [sourceSignal flattenMap:^RACStream *(id value) {
+//        return makeSignal(value);
+//    }];
+    
+    RACSignal *resultSignal = [[sourceSignal map:^RACStream *(NSNumber *value) {
+        return makeSignal(value);
+    }] switchToLatest];
+    
+    [resultSignal subscribeNext:^(NSString *x) {
+        NSLog(@"%@", x);
+    }];
 }
 
 - (void)sideEffectDemo
